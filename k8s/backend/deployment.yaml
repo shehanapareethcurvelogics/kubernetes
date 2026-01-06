@@ -18,7 +18,7 @@ spec:
       initContainers:
       # Run migrations before starting the app
       - name: migrate
-        image: shehanaclg/kubernetes-example-backend:latest  # Will be built and loaded into Minikube
+        image: shehanapareethcurvelogics/kubernetes-example-backend:latest  # Will be built and loaded into Minikube
         command:
         - sh
         - -c
@@ -45,7 +45,7 @@ spec:
               key: POSTGRES_DB
       containers:
       - name: backend
-        image: shehanaclg/kubernetes-example-backend:latest  # Will be built and loaded into Minikube
+        image: shehanapareethcurvelogics/kubernetes-example-backend:latest  # Will be built and loaded into Minikube
         ports:
         - containerPort: 8000
         env:

@@ -45,7 +45,7 @@ spec:
     // Environment variables
     environment {
         // Docker registry (use your Docker Hub username)
-        DOCKER_REGISTRY = 'shehanaclg'
+        DOCKER_REGISTRY = 'shehanapareethcurvelogics'
         BACKEND_IMAGE = "${DOCKER_REGISTRY}/kubernetes-example-backend"
         FRONTEND_IMAGE = "${DOCKER_REGISTRY}/kubernetes-example-frontend"
         IMAGE_TAG = "${env.BUILD_NUMBER}"  // Use build number as tag
