@@ -28,6 +28,8 @@ spec:
         env:
         - name: DATABASE_URL
           value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-svc:5432/$(POSTGRES_DB)"
+        - name: DB_HOST
+          value: "postgres-svc"  # Kubernetes service name (Django settings.py uses this)
         - name: POSTGRES_USER
           valueFrom:
             configMapKeyRef:
@@ -56,6 +58,8 @@ spec:
               key: DEBUG
         - name: DATABASE_URL
           value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-svc:5432/$(POSTGRES_DB)"
+        - name: DB_HOST
+          value: "postgres-svc"  # Kubernetes service name (Django settings.py uses this)
         - name: POSTGRES_USER
           valueFrom:
             configMapKeyRef:
