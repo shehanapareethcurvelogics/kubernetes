@@ -301,26 +301,59 @@ spec:
                 container('kubectl') {
                     dir('k8s') {
                         script {
-                            // Update image tags in deployment files (if needed)
-                            // For now, we'll use the latest tag
+                            // Quick check: verify images exist (if pushed to registry)
+                            sh '''
+                                echo "🔍 Checking if images are available..."
+                                kubectl get pods -n ${K8S_NAMESPACE} -l app=backend 2>/dev/null | grep -q ImagePullBackOff && {
+                                    echo "⚠️ Warning: Backend pods have ImagePullBackOff - images may not be available"
+                                    echo "💡 Make sure images are pushed to Docker Hub or loaded into Minikube"
+                                } || true
+                            '''
                             
                             // Apply all Kubernetes manifests
                             sh '''
+                                echo "📝 Applying Kubernetes manifests..."
                                 kubectl apply -f namespace.yaml
                                 kubectl apply -f configmap.yaml
                                 kubectl apply -f secret.yaml
                                 kubectl apply -f postgres/
                                 kubectl apply -f backend/
                                 kubectl apply -f frontend/
+                                echo "✅ Manifests applied"
                             '''
                             
-                            // Wait for deployments to be ready
+                            // Wait for deployments to be ready (optimized with shorter timeout and better feedback)
                             sh '''
                                 echo "⏳ Waiting for deployments to be ready..."
-                                kubectl wait --for=condition=available --timeout=300s deployment/backend-deployment -n ${K8S_NAMESPACE} 2>&1 || echo "Backend deployment wait timeout (check manually)"
-                                kubectl wait --for=condition=available --timeout=300s deployment/frontend-deployment -n ${K8S_NAMESPACE} 2>&1 || echo "Frontend deployment wait timeout (check manually)"
-                                echo "Deployment status:"
+                                echo "Initial pod status:"
+                                kubectl get pods -n ${K8S_NAMESPACE} || true
+                                
+                                # Wait for backend (reduced timeout to 90s)
+                                echo ""
+                                echo "⏳ Waiting for backend deployment (max 90s)..."
+                                BACKEND_WAIT=$(kubectl wait --for=condition=available --timeout=90s deployment/backend-deployment -n ${K8S_NAMESPACE} 2>&1) || {
+                                    echo "⚠️ Backend deployment not ready after 90s"
+                                    echo "Backend pod details:"
+                                    kubectl get pods -n ${K8S_NAMESPACE} -l app=backend || true
+                                    kubectl describe deployment backend-deployment -n ${K8S_NAMESPACE} | grep -A 10 "Events:" || true
+                                }
+                                
+                                # Wait for frontend (reduced timeout to 90s)
+                                echo ""
+                                echo "⏳ Waiting for frontend deployment (max 90s)..."
+                                FRONTEND_WAIT=$(kubectl wait --for=condition=available --timeout=90s deployment/frontend-deployment -n ${K8S_NAMESPACE} 2>&1) || {
+                                    echo "⚠️ Frontend deployment not ready after 90s"
+                                    echo "Frontend pod details:"
+                                    kubectl get pods -n ${K8S_NAMESPACE} -l app=frontend || true
+                                    kubectl describe deployment frontend-deployment -n ${K8S_NAMESPACE} | grep -A 10 "Events:" || true
+                                }
+                                
+                                echo ""
+                                echo "📊 Deployment summary:"
                                 kubectl get deployments -n ${K8S_NAMESPACE}
+                                echo ""
+                                echo "📦 Current pod status:"
+                                kubectl get pods -n ${K8S_NAMESPACE} -o wide
                             '''
                             
                             // Show deployment status
