@@ -179,7 +179,7 @@ spec:
                                                         -v "$BACKEND_DIR:/app" \
                                                         -w /app \
                                                         python:3.11-slim \
-                                                        sh -c "pwd && ls -la /app/requirements.txt && pip install --no-cache-dir -r /app/requirements.txt && python /app/manage.py test"
+                                                        sh -c "pwd && ls -la && test -f requirements.txt && pip install --no-cache-dir -r requirements.txt && python manage.py test"
                                                 '''
                                             }
                                         }
@@ -205,7 +205,7 @@ spec:
                                                         -v "$FRONTEND_DIR:/app" \
                                                         -w /app \
                                                         node:18-alpine \
-                                                        sh -c "cd /app && (npm ci || npm install) && npm test -- --watchAll=false"
+                                                        sh -c "pwd && ls -la && test -f package.json && (npm ci 2>/dev/null || npm install) && npm test -- --watchAll=false"
                                                 '''
                                             }
                                         }
