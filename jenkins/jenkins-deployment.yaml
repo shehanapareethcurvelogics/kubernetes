@@ -20,7 +20,7 @@ metadata:
   name: jenkins
 rules:
 - apiGroups: [""]
-  resources: ["pods", "services", "namespaces", "configmaps", "secrets", "nodes"]
+  resources: ["pods", "services", "namespaces", "configmaps", "secrets", "nodes", "persistentvolumeclaims"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["apps"]
   resources: ["deployments", "replicasets"]
