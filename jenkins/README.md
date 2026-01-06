@@ -5,9 +5,11 @@ This directory contains Jenkins CI/CD pipeline configuration for automating the 
 ## 📁 Files Overview
 
 - **`Jenkinsfile`** - Main CI/CD pipeline definition (Groovy DSL)
-- **`jenkins-deployment.yaml`** - Kubernetes manifests to deploy Jenkins in your cluster
+- **`jenkins-deployment.yaml`** - Kubernetes manifests to deploy Jenkins (NOT USED - Jenkins installed via Helm instead)
 - **`jenkins-config.yaml`** - Configuration guide and setup instructions
 - **`README.md`** - This file
+
+**Note:** Jenkins is installed via Helm (see `docs.md`). The `jenkins-deployment.yaml` file is kept for reference only.
 
 ## 🎯 Pipeline Overview
 
@@ -56,31 +58,47 @@ The Jenkins pipeline automates the following steps:
 
 ## 🚀 Quick Start
 
-### Option 1: Run Jenkins in Kubernetes (Recommended)
+### Option 1: Run Jenkins in Kubernetes via Helm (Recommended for Production)
 
-1. **Deploy Jenkins to Kubernetes:**
+1. **Install Jenkins using Helm:**
 
 ```bash
-kubectl apply -f jenkins/jenkins-deployment.yaml
+# Add Jenkins Helm repository
+helm repo add jenkins https://charts.jenkins.io
+helm repo update
+
+# Install Jenkins
+helm install jenkins jenkins/jenkins -n jenkins --create-namespace
+
+# Wait for Jenkins to be ready
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=jenkins-controller -n jenkins --timeout=300s
 ```
 
 2. **Get Jenkins URL:**
 
 ```bash
-# Get Minikube IP
-minikube ip
+# Access via NodePort
+minikube service jenkins -n jenkins
 
-# Access Jenkins at: http://<minikube-ip>:30088
+# Or get the URL directly
+minikube service jenkins -n jenkins --url
+
 # Or use port-forward:
-kubectl port-forward service/jenkins 8080:8080 -n jenkins
+kubectl port-forward svc/jenkins 8080:8080 -n jenkins
 # Access at: http://localhost:8080
 ```
 
 3. **Get Jenkins Admin Password:**
 
 ```bash
-kubectl exec -it deployment/jenkins -n jenkins -- cat /var/jenkins_home/secrets/initialAdminPassword
+# Get admin password from Helm secret
+kubectl exec -n jenkins jenkins-0 -c jenkins -- cat /run/secrets/additional/chart-admin-password
+
+# Or from initial admin password (if setup wizard ran)
+kubectl exec -n jenkins jenkins-0 -c jenkins -- cat /var/jenkins_home/secrets/initialAdminPassword
 ```
+
+**Note:** If you prefer using `jenkins-deployment.yaml` instead of Helm, see the note in that file.
 
 ### Option 2: Run Jenkins Locally (Docker)
 
@@ -120,8 +138,10 @@ Go to **Manage Jenkins > Manage Plugins** and install:
 
 ### Step 3: Configure Kubernetes Access
 
-**If Jenkins is in Kubernetes:**
-- Jenkins service account already has permissions (configured in `jenkins-deployment.yaml`)
+**If Jenkins is in Kubernetes (Helm installation):**
+- Jenkins service account already has permissions (configured via Helm)
+- RBAC permissions are set up automatically
+- To add custom permissions, update the ClusterRole: `kubectl edit clusterrole jenkins`
 
 **If Jenkins is outside Kubernetes:**
 1. Copy your kubeconfig: `~/.kube/config`

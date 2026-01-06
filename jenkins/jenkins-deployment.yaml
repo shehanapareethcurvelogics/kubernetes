@@ -1,5 +1,10 @@
 # Jenkins Deployment for Kubernetes
-# This allows you to run Jenkins inside your Kubernetes cluster
+# NOTE: This file is NOT used - Jenkins is installed via Helm instead
+# This file is kept for reference only. To use it, first remove Helm Jenkins:
+#   helm uninstall jenkins -n jenkins
+# Then apply this file: kubectl apply -f jenkins/jenkins-deployment.yaml
+#
+# For production, Helm installation is recommended (see docs.md)
 
 apiVersion: v1
 kind: Namespace
