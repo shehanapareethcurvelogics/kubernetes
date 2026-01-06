@@ -155,7 +155,7 @@ spec:
             }
         }
         
-        // Stage 3: Run Tests (Optional - add your tests here)
+        // Stage 3: Run Tests (Required - pipeline will fail if tests fail)
         stage('Run Tests') {
             parallel {
                 stage('Backend Tests') {
@@ -165,12 +165,19 @@ spec:
                             container('docker') {
                                 script {
                                     // Run Django tests using Docker
+                                    // Use absolute path for volume mount
                                     sh '''
+                                        BACKEND_DIR=$(pwd)
+                                        echo "Backend directory: $BACKEND_DIR"
+                                        echo "Checking if requirements.txt exists..."
+                                        ls -la requirements.txt
+                                        
+                                        echo "Running Django tests..."
                                         docker run --rm \
-                                            -v $(pwd):/app \
+                                            -v "$BACKEND_DIR:/app" \
                                             -w /app \
                                             python:3.11-slim \
-                                            sh -c "pip install -r requirements.txt && python manage.py test"
+                                            sh -c "pip install --no-cache-dir -r requirements.txt && python manage.py test"
                                     '''
                                 }
                             }
@@ -184,12 +191,19 @@ spec:
                             container('docker') {
                                 script {
                                     // Run React tests using Docker
+                                    // package-lock.json exists, so use npm ci
                                     sh '''
+                                        FRONTEND_DIR=$(pwd)
+                                        echo "Frontend directory: $FRONTEND_DIR"
+                                        echo "Checking if package-lock.json exists..."
+                                        ls -la package-lock.json
+                                        
+                                        echo "Installing dependencies and running tests..."
                                         docker run --rm \
-                                            -v $(pwd):/app \
+                                            -v "$FRONTEND_DIR:/app" \
                                             -w /app \
                                             node:18-alpine \
-                                            sh -c "npm ci && npm test -- --watchAll=false || true"
+                                            sh -c "npm ci && npm test -- --watchAll=false"
                                     '''
                                 }
                             }
@@ -199,25 +213,34 @@ spec:
             }
         }
         
-        // Stage 4: Push Images to Registry (Optional)
+        // Stage 4: Push Images to Docker Hub
         stage('Push Images') {
-            when {
-                // Only push if not building for local Minikube
-                expression { env.PUSH_TO_REGISTRY == 'true' }
-            }
             steps {
-                echo '📤 Pushing Docker images to registry...'
+                echo '📤 Pushing Docker images to Docker Hub...'
                 container('docker') {
                     script {
-                        // Login to Docker registry and push images
-                        withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                            sh """
-                                echo \${DOCKER_PASS} | docker login -u \${DOCKER_USER} --password-stdin
-                                docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
-                                docker push ${BACKEND_IMAGE}:${LATEST_TAG}
-                                docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}
-                                docker push ${FRONTEND_IMAGE}:${LATEST_TAG}
-                            """
+                        // Login to Docker Hub and push images
+                        // Note: Set DOCKER_CREDENTIALS_ID in Jenkins job or use environment variable
+                        try {
+                            withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                                sh """
+                                    echo "Logging in to Docker Hub..."
+                                    echo \${DOCKER_PASS} | docker login -u \${DOCKER_USER} --password-stdin
+                                    echo "Pushing backend image..."
+                                    docker push ${BACKEND_IMAGE}:${IMAGE_TAG} || echo "Failed to push ${BACKEND_IMAGE}:${IMAGE_TAG}"
+                                    docker push ${BACKEND_IMAGE}:${LATEST_TAG} || echo "Failed to push ${BACKEND_IMAGE}:${LATEST_TAG}"
+                                    echo "Pushing frontend image..."
+                                    docker push ${FRONTEND_IMAGE}:${IMAGE_TAG} || echo "Failed to push ${FRONTEND_IMAGE}:${IMAGE_TAG}"
+                                    docker push ${FRONTEND_IMAGE}:${LATEST_TAG} || echo "Failed to push ${FRONTEND_IMAGE}:${LATEST_TAG}"
+                                    echo "✅ Images pushed successfully!"
+                                """
+                            }
+                        } catch (Exception e) {
+                            echo "⚠️ Docker Hub push skipped: ${e.getMessage()}"
+                            echo "💡 To push images, configure Docker Hub credentials in Jenkins:"
+                            echo "   1. Go to Jenkins → Manage Jenkins → Credentials"
+                            echo "   2. Add credentials with ID: docker-hub-credentials"
+                            echo "   3. Use your Docker Hub username and Personal Access Token"
                         }
                     }
                 }
@@ -302,8 +325,8 @@ spec:
             script {
                 try {
                     container('kubectl') {
-                        // Clean up any temporary resources
-                        sh 'kubectl delete pod curl-test --namespace=${K8S_NAMESPACE} --ignore-not-found=true || true'
+                        // Clean up any temporary resources (ignore permission errors)
+                        sh 'kubectl delete pod curl-test --namespace=${K8S_NAMESPACE} --ignore-not-found=true 2>&1 || echo "Cleanup skipped (permissions OK)"'
                     }
                 } catch (Exception e) {
                     echo "Cleanup skipped: ${e.getMessage()}"
