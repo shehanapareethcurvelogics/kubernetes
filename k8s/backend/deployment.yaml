@@ -82,14 +82,16 @@ spec:
               key: SECRET_KEY
         livenessProbe:
           httpGet:
-            path: /api/auth/user/
+            path: /api/auth/health/
             port: 8000
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /api/auth/user/
+            path: /api/auth/health/
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
 

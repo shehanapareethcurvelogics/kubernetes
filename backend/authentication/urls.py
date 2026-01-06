@@ -27,5 +27,9 @@ urlpatterns = [
     
     path('logout/', views.logout_user, name='logout'),
     # Full URL: http://localhost:8000/api/auth/logout/
+    
+    path('health/', views.health_check, name='health'),
+    # Full URL: http://localhost:8000/api/auth/health/
+    # Used by Kubernetes readiness/liveness probes
 ]
 
