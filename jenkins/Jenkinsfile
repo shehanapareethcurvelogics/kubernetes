@@ -179,16 +179,14 @@ spec:
                             container('docker') {
                                 script {
                                     try {
-                                        // Run Django tests using Docker with proper user mapping
+                                        // Run Django tests using Docker with proper file verification
                                         sh '''
                                             BACKEND_DIR=$(pwd)
-                                            USER_ID=$(id -u)
-                                            GROUP_ID=$(id -g)
-                                            
                                             echo "Backend directory: $BACKEND_DIR"
-                                            echo "User ID: $USER_ID, Group ID: $GROUP_ID"
-                                            echo "Checking if requirements.txt exists..."
-                                            ls -la requirements.txt || exit 1
+                                            echo "Verifying files exist..."
+                                            test -f requirements.txt || { echo "ERROR: requirements.txt not found"; exit 1; }
+                                            test -f manage.py || { echo "ERROR: manage.py not found"; exit 1; }
+                                            ls -la requirements.txt manage.py
                                             
                                             echo "Running Django tests..."
                                             docker run --rm \
@@ -196,7 +194,7 @@ spec:
                                                 -w /app \
                                                 --user root \
                                                 python:3.11-slim \
-                                                sh -c "chown -R root:root /app && pip install --no-cache-dir -r requirements.txt && python manage.py test --noinput || echo 'Tests completed with warnings'"
+                                                sh -c "cd /app && ls -la && test -f requirements.txt && test -f manage.py && pip install --no-cache-dir -r requirements.txt && python manage.py test --noinput || echo 'Tests completed with warnings'"
                                         '''
                                     } catch (Exception e) {
                                         echo "⚠️ Backend tests failed but continuing: ${e.getMessage()}"
@@ -214,12 +212,13 @@ spec:
                             container('docker') {
                                 script {
                                     try {
-                                        // Run React tests using Docker with proper error handling
+                                        // Run React tests using Docker with proper file verification
                                         sh '''
                                             FRONTEND_DIR=$(pwd)
                                             echo "Frontend directory: $FRONTEND_DIR"
-                                            echo "Checking if package.json exists..."
-                                            ls -la package.json || exit 1
+                                            echo "Verifying files exist..."
+                                            test -f package.json || { echo "ERROR: package.json not found"; exit 1; }
+                                            ls -la package.json
                                             
                                             echo "Installing dependencies and running tests..."
                                             docker run --rm \
@@ -227,7 +226,7 @@ spec:
                                                 -w /app \
                                                 --user root \
                                                 node:18-alpine \
-                                                sh -c "chown -R root:root /app && (npm ci 2>/dev/null || npm install) && npm test -- --watchAll=false || echo 'Tests completed with warnings'"
+                                                sh -c "cd /app && ls -la && test -f package.json && (npm ci 2>/dev/null || npm install) && npm test -- --watchAll=false || echo 'Tests completed with warnings'"
                                         '''
                                     } catch (Exception e) {
                                         echo "⚠️ Frontend tests failed but continuing: ${e.getMessage()}"

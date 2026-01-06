@@ -221,7 +221,7 @@ Edit `Jenkinsfile` to customize:
 
 ```groovy
 environment {
-    DOCKER_REGISTRY = 'shehanaclg'  // Your Docker Hub username
+    DOCKER_REGISTRY = 'shehanapareethcurvelogics'  // Your Docker Hub username
     BACKEND_IMAGE = "${DOCKER_REGISTRY}/kubernetes-example-backend"
     FRONTEND_IMAGE = "${DOCKER_REGISTRY}/kubernetes-example-frontend"
     K8S_NAMESPACE = 'django-auth-app'

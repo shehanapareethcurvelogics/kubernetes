@@ -19,6 +19,7 @@ spec:
       # Run migrations before starting the app
       - name: migrate
         image: shehanapareethcurvelogics/kubernetes-example-backend:latest  # Will be built and loaded into Minikube
+        imagePullPolicy: Always  # Always pull latest image
         command:
         - sh
         - -c
@@ -48,6 +49,7 @@ spec:
       containers:
       - name: backend
         image: shehanapareethcurvelogics/kubernetes-example-backend:latest  # Will be built and loaded into Minikube
+        imagePullPolicy: Always  # Always pull latest image to get health check endpoint
         ports:
         - containerPort: 8000
         env:
