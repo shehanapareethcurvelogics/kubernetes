@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: django-auth-app
+data:
+  DEBUG: "1"
+  POSTGRES_DB: "django_auth_db"
+  POSTGRES_USER: "django_user"
+  # Database host will be the service name
+  DB_HOST: "postgres-svc"
+  DB_PORT: "5432"
+

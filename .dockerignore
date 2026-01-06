@@ -1,0 +1,35 @@
+# Files/folders to exclude from Docker build context
+# This makes builds faster and images smaller
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Django specific
+*.log
+db.sqlite3
+/media
+/static
+
+# Git
+.git/
+.gitignore
+

@@ -1,0 +1,118 @@
+# Jenkins Configuration for CI/CD Pipeline
+# This file contains configuration examples and setup instructions
+
+# ============================================
+# Jenkins Pipeline Configuration
+# ============================================
+
+# Environment Variables to set in Jenkins:
+# - PUSH_TO_REGISTRY: 'true' to push images to Docker Hub, 'false' for local only
+# - LOAD_TO_MINIKUBE: 'true' to load images into Minikube
+# - DOCKER_CREDENTIALS_ID: ID of Docker Hub credentials stored in Jenkins
+
+# ============================================
+# Required Jenkins Plugins
+# ============================================
+# Install these plugins in Jenkins:
+# 1. Docker Pipeline Plugin
+# 2. Kubernetes Plugin
+# 3. Git Plugin
+# 4. Pipeline Plugin
+# 5. Blue Ocean (optional, for better UI)
+
+# ============================================
+# Jenkins Credentials Setup
+# ============================================
+
+# 1. Docker Hub Credentials:
+#    - Go to Jenkins > Manage Jenkins > Credentials
+#    - Add credentials with ID: docker-hub-credentials
+#    - Type: Username with password
+#    - Username: your-dockerhub-username
+#    - Password: your-dockerhub-password
+
+# 2. Kubernetes Configuration:
+#    - Copy kubeconfig from: ~/.kube/config
+#    - Go to Jenkins > Manage Jenkins > Configure System
+#    - Add Kubernetes Cloud configuration
+#    - Or use kubectl from Jenkins pod
+
+# ============================================
+# Pipeline Parameters (Optional)
+# ============================================
+
+# You can add parameters to the Jenkinsfile:
+# properties([
+#     parameters([
+#         choice(
+#             name: 'DEPLOY_ENV',
+#             choices: ['dev', 'staging', 'prod'],
+#             description: 'Deployment environment'
+#         ),
+#         booleanParam(
+#             name: 'RUN_TESTS',
+#             defaultValue: true,
+#             description: 'Run tests before deployment'
+#         ),
+#         string(
+#             name: 'IMAGE_TAG',
+#             defaultValue: 'latest',
+#             description: 'Docker image tag'
+#         )
+#     ])
+# ])
+
+# ============================================
+# Webhook Configuration (GitHub/GitLab)
+# ============================================
+
+# For GitHub:
+# 1. Go to your repository > Settings > Webhooks
+# 2. Add webhook URL: http://your-jenkins-url/github-webhook/
+# 3. Content type: application/json
+# 4. Events: Just the push event
+
+# For GitLab:
+# 1. Go to your project > Settings > Webhooks
+# 2. Add webhook URL: http://your-jenkins-url/project/your-project-name
+# 3. Trigger: Push events
+
+# ============================================
+# Minikube Integration
+# ============================================
+
+# If Jenkins is running inside Kubernetes:
+# - Jenkins pod needs access to Minikube's Docker daemon
+# - Or configure kubectl to point to Minikube cluster
+# - Set KUBECONFIG environment variable in Jenkins pod
+
+# If Jenkins is running outside Kubernetes:
+# - Ensure kubectl is configured to use Minikube: kubectl config use-context minikube
+# - Ensure minikube command is available in Jenkins
+
+# ============================================
+# Troubleshooting
+# ============================================
+
+# Common Issues:
+# 1. "docker: command not found"
+#    - Install Docker in Jenkins container or use Docker-in-Docker
+#    - Or mount Docker socket: /var/run/docker.sock
+
+# 2. "kubectl: command not found"
+#    - Install kubectl in Jenkins container
+#    - Or use Kubernetes plugin
+
+# 3. "minikube: command not found"
+#    - Install Minikube in Jenkins container
+#    - Or use kubectl directly instead of minikube commands
+
+# 4. "Permission denied" for Docker
+#    - Add Jenkins user to docker group
+#    - Or run Jenkins with root privileges (not recommended)
+
+# 5. "Image pull errors"
+#    - Check image name and tag
+#    - Verify Docker registry credentials
+#    - For Minikube: ensure images are loaded: minikube image load <image>
+

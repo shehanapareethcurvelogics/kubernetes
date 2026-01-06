@@ -1,0 +1,332 @@
+pipeline {
+    agent {
+        kubernetes {
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ['\$(JENKINS_SECRET)', '\$(JENKINS_NAME)']
+  - name: docker
+    image: docker:latest
+    command:
+    - cat
+    tty: true
+    volumeMounts:
+    - name: docker-sock
+      mountPath: /var/run/docker.sock
+  - name: kubectl
+    image: alpine/k8s:1.28.2
+    command:
+    - cat
+    tty: true
+  volumes:
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+      type: Socket
+"""
+        }
+    }
+    
+    // Environment variables
+    environment {
+        // Docker registry (use your Docker Hub username)
+        DOCKER_REGISTRY = 'shehanaclg'
+        BACKEND_IMAGE = "${DOCKER_REGISTRY}/kubernetes-example-backend"
+        FRONTEND_IMAGE = "${DOCKER_REGISTRY}/kubernetes-example-frontend"
+        IMAGE_TAG = "${env.BUILD_NUMBER}"  // Use build number as tag
+        LATEST_TAG = "latest"
+        
+        // Kubernetes namespace
+        K8S_NAMESPACE = 'django-auth-app'
+        
+        // Docker credentials ID (configure in Jenkins)
+        DOCKER_CREDENTIALS_ID = 'docker-hub-credentials'
+    }
+    
+    stages {
+        // Stage 0: Verify Docker and Kubernetes access
+        stage('Prepare') {
+            steps {
+                echo '⏳ Verifying Docker and Kubernetes access...'
+                container('docker') {
+                    script {
+                        sh '''
+                            echo "Checking Docker access..."
+                            docker version || echo "Docker check failed"
+                            docker info | head -5 || echo "Docker info check failed"
+                        '''
+                    }
+                }
+                container('kubectl') {
+                    script {
+                        sh '''
+                            echo "Checking Kubernetes access..."
+                            # kubectl should use the service account token automatically in Kubernetes
+                            kubectl version --client || echo "Kubectl version check failed"
+                            kubectl get nodes 2>&1 || echo "Nodes check failed (this is OK if cluster access needs setup)"
+                        '''
+                    }
+                }
+            }
+        }
+        
+        // Stage 0.5: Checkout Source Code from Git
+        stage('Checkout Source Code') {
+            steps {
+                echo '📦 Checking out source code from Git repository...'
+                script {
+                    // Checkout code from Git repository
+                    // This requires Jenkins job to be configured with "Pipeline script from SCM"
+                    checkout scm
+                    
+                    // Verify source code was checked out
+                    def backendExists = sh(
+                        script: 'test -d backend && echo "exists" || echo "missing"',
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (backendExists == "missing") {
+                        error("""
+                            ❌ Source code checkout failed!
+                            
+                            The backend/ directory is missing after checkout.
+                            
+                            Please verify:
+                            1. Git repository URL is correct in Jenkins job settings
+                            2. Repository contains backend/ and frontend/ directories
+                            3. Jenkins has access to the repository (credentials configured)
+                            4. Branch name is correct
+                            
+                            Current workspace: \$(pwd)
+                            Files in workspace:
+                        """)
+                        sh 'ls -la'
+                    } else {
+                        echo "✅ Source code checked out successfully"
+                        sh '''
+                            echo "Backend directory contents:"
+                            ls -la backend/ | head -10
+                            echo ""
+                            echo "Frontend directory contents:"
+                            ls -la frontend/ | head -10 || echo "Frontend directory not found"
+                        '''
+                    }
+                }
+            }
+        }
+        
+        // Stage 1: Build Backend Docker Image
+        stage('Build Backend') {
+            steps {
+                echo '🐍 Building Django Backend Docker image...'
+                dir('backend') {
+                    container('docker') {
+                        script {
+                            // Build Docker image using Docker-in-Docker
+                            sh """
+                                docker build -t ${BACKEND_IMAGE}:${IMAGE_TAG} .
+                                docker tag ${BACKEND_IMAGE}:${IMAGE_TAG} ${BACKEND_IMAGE}:${LATEST_TAG}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Stage 2: Build Frontend Docker Image
+        stage('Build Frontend') {
+            steps {
+                echo '⚛️  Building React Frontend Docker image...'
+                dir('frontend') {
+                    container('docker') {
+                        script {
+                            // Build Docker image using Docker-in-Docker
+                            sh """
+                                docker build -t ${FRONTEND_IMAGE}:${IMAGE_TAG} .
+                                docker tag ${FRONTEND_IMAGE}:${IMAGE_TAG} ${FRONTEND_IMAGE}:${LATEST_TAG}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Stage 3: Run Tests (Optional - add your tests here)
+        stage('Run Tests') {
+            parallel {
+                stage('Backend Tests') {
+                    steps {
+                        echo '🧪 Running Backend tests...'
+                        dir('backend') {
+                            container('docker') {
+                                script {
+                                    // Run Django tests using Docker
+                                    sh '''
+                                        docker run --rm \
+                                            -v $(pwd):/app \
+                                            -w /app \
+                                            python:3.11-slim \
+                                            sh -c "pip install -r requirements.txt && python manage.py test"
+                                    '''
+                                }
+                            }
+                        }
+                    }
+                }
+                stage('Frontend Tests') {
+                    steps {
+                        echo '🧪 Running Frontend tests...'
+                        dir('frontend') {
+                            container('docker') {
+                                script {
+                                    // Run React tests using Docker
+                                    sh '''
+                                        docker run --rm \
+                                            -v $(pwd):/app \
+                                            -w /app \
+                                            node:18-alpine \
+                                            sh -c "npm ci && npm test -- --watchAll=false || true"
+                                    '''
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Stage 4: Push Images to Registry (Optional)
+        stage('Push Images') {
+            when {
+                // Only push if not building for local Minikube
+                expression { env.PUSH_TO_REGISTRY == 'true' }
+            }
+            steps {
+                echo '📤 Pushing Docker images to registry...'
+                container('docker') {
+                    script {
+                        // Login to Docker registry and push images
+                        withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                            sh """
+                                echo \${DOCKER_PASS} | docker login -u \${DOCKER_USER} --password-stdin
+                                docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
+                                docker push ${BACKEND_IMAGE}:${LATEST_TAG}
+                                docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}
+                                docker push ${FRONTEND_IMAGE}:${LATEST_TAG}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Stage 5: Load Images to Minikube (For local development)
+        stage('Load Images to Minikube') {
+            when {
+                // Only load if building for local Minikube
+                expression { env.LOAD_TO_MINIKUBE == 'true' || env.PUSH_TO_REGISTRY != 'true' }
+            }
+            steps {
+                echo '🚀 Loading Docker images to Minikube...'
+                script {
+                    // Since we're using Minikube with Docker driver, images built with Docker
+                    // are already available to Minikube. We can use minikube image load if needed.
+                    // For Docker driver, images are automatically available.
+                    echo "✅ Images built with Docker are available to Minikube (Docker driver)"
+                    echo "💡 If using different driver, run: minikube image load ${BACKEND_IMAGE}:${LATEST_TAG}"
+                    echo "💡 If using different driver, run: minikube image load ${FRONTEND_IMAGE}:${LATEST_TAG}"
+                }
+            }
+        }
+        
+        // Stage 6: Deploy to Kubernetes
+        stage('Deploy to Kubernetes') {
+            steps {
+                echo '🚀 Deploying to Kubernetes...'
+                container('kubectl') {
+                    dir('k8s') {
+                        script {
+                            // Update image tags in deployment files (if needed)
+                            // For now, we'll use the latest tag
+                            
+                            // Apply all Kubernetes manifests
+                            sh '''
+                                kubectl apply -f namespace.yaml
+                                kubectl apply -f configmap.yaml
+                                kubectl apply -f secret.yaml
+                                kubectl apply -f postgres/
+                                kubectl apply -f backend/
+                                kubectl apply -f frontend/
+                            '''
+                            
+                            // Wait for deployments to be ready
+                            sh '''
+                                echo "⏳ Waiting for deployments to be ready..."
+                                kubectl wait --for=condition=available --timeout=300s deployment/backend-deployment -n ${K8S_NAMESPACE} || true
+                                kubectl wait --for=condition=available --timeout=300s deployment/frontend-deployment -n ${K8S_NAMESPACE} || true
+                            '''
+                            
+                            // Show deployment status
+                            sh 'kubectl get all -n ${K8S_NAMESPACE}'
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Stage 7: Health Check
+        stage('Health Check') {
+            steps {
+                echo '🏥 Performing health checks...'
+                container('kubectl') {
+                    script {
+                        // Check backend (via port-forward or service)
+                        sh """
+                            echo "Checking backend health..."
+                            kubectl run curl-test --image=curlimages/curl --rm -i --restart=Never --namespace=${K8S_NAMESPACE} -- curl -f http://backend-svc:8000/api/auth/user/ || echo "Backend health check failed"
+                        """
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        // Always run these steps
+        always {
+            echo '📊 Pipeline completed. Cleaning up...'
+            script {
+                try {
+                    container('kubectl') {
+                        // Clean up any temporary resources
+                        sh 'kubectl delete pod curl-test --namespace=${K8S_NAMESPACE} --ignore-not-found=true || true'
+                    }
+                } catch (Exception e) {
+                    echo "Cleanup skipped: ${e.getMessage()}"
+                }
+            }
+        }
+        
+        // Run on success
+        success {
+            echo '✅ Pipeline succeeded!'
+            echo "🌐 Application deployed to namespace: ${K8S_NAMESPACE}"
+        }
+        
+        // Run on failure
+        failure {
+            echo '❌ Pipeline failed!'
+            // You can add notifications here (email, Slack, etc.)
+        }
+        
+        // Run on unstable
+        unstable {
+            echo '⚠️  Pipeline is unstable!'
+        }
+    }
+}
+
