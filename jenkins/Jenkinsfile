@@ -158,58 +158,60 @@ spec:
         // Stage 3: Run Tests (Required - pipeline will fail if tests fail)
         stage('Run Tests') {
             parallel {
-                stage('Backend Tests') {
-                    steps {
-                        echo '🧪 Running Backend tests...'
-                        dir('backend') {
-                            container('docker') {
-                                script {
-                                    // Run Django tests using Docker
-                                    // Use absolute path for volume mount
-                                    sh '''
-                                        BACKEND_DIR=$(pwd)
-                                        echo "Backend directory: $BACKEND_DIR"
-                                        echo "Checking if requirements.txt exists..."
-                                        ls -la requirements.txt
-                                        
-                                        echo "Running Django tests..."
-                                        docker run --rm \
-                                            -v "$BACKEND_DIR:/app" \
-                                            -w /app \
-                                            python:3.11-slim \
-                                            sh -c "pip install --no-cache-dir -r requirements.txt && python manage.py test"
-                                    '''
+                            stage('Backend Tests') {
+                                steps {
+                                    echo '🧪 Running Backend tests...'
+                                    dir('backend') {
+                                        container('docker') {
+                                            script {
+                                                // Run Django tests using Docker
+                                                // Use absolute path for volume mount
+                                                sh '''
+                                                    BACKEND_DIR=$(pwd)
+                                                    echo "Backend directory: $BACKEND_DIR"
+                                                    echo "Checking if requirements.txt exists..."
+                                                    ls -la requirements.txt
+                                                    echo "Contents of backend directory:"
+                                                    ls -la
+                                                    
+                                                    echo "Running Django tests..."
+                                                    docker run --rm \
+                                                        -v "$BACKEND_DIR:/app" \
+                                                        -w /app \
+                                                        python:3.11-slim \
+                                                        sh -c "pwd && ls -la /app/requirements.txt && pip install --no-cache-dir -r /app/requirements.txt && python /app/manage.py test"
+                                                '''
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                }
-                stage('Frontend Tests') {
-                    steps {
-                        echo '🧪 Running Frontend tests...'
-                        dir('frontend') {
-                            container('docker') {
-                                script {
-                                    // Run React tests using Docker
-                                    // package-lock.json exists, so use npm ci
-                                    sh '''
-                                        FRONTEND_DIR=$(pwd)
-                                        echo "Frontend directory: $FRONTEND_DIR"
-                                        echo "Checking if package-lock.json exists..."
-                                        ls -la package-lock.json
-                                        
-                                        echo "Installing dependencies and running tests..."
-                                        docker run --rm \
-                                            -v "$FRONTEND_DIR:/app" \
-                                            -w /app \
-                                            node:18-alpine \
-                                            sh -c "npm ci && npm test -- --watchAll=false"
-                                    '''
+                            stage('Frontend Tests') {
+                                steps {
+                                    echo '🧪 Running Frontend tests...'
+                                    dir('frontend') {
+                                        container('docker') {
+                                            script {
+                                                // Run React tests using Docker
+                                                // Check lockfileVersion and use appropriate command
+                                                sh '''
+                                                    FRONTEND_DIR=$(pwd)
+                                                    echo "Frontend directory: $FRONTEND_DIR"
+                                                    echo "Checking if package-lock.json exists..."
+                                                    ls -la package-lock.json
+                                                    
+                                                    echo "Installing dependencies and running tests..."
+                                                    docker run --rm \
+                                                        -v "$FRONTEND_DIR:/app" \
+                                                        -w /app \
+                                                        node:18-alpine \
+                                                        sh -c "cd /app && (npm ci || npm install) && npm test -- --watchAll=false"
+                                                '''
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                }
             }
         }
         
