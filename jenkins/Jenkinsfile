@@ -321,6 +321,26 @@ spec:
                                 echo "✅ Manifests applied"
                             '''
                             
+                            // Add CHANGE-CAUSE annotations for deployment tracking
+                            sh """
+                                echo "📝 Adding CHANGE-CAUSE annotations for deployment tracking..."
+                                CHANGE_CAUSE="Jenkins Build #\${BUILD_NUMBER} - \${BUILD_URL} - Image Tag: \${IMAGE_TAG}"
+                                
+                                # Annotate backend deployment
+                                kubectl annotate deployment backend-deployment \
+                                    -n \${K8S_NAMESPACE} \
+                                    kubernetes.io/change-cause="\${CHANGE_CAUSE}" \
+                                    --overwrite || echo "⚠️ Failed to annotate backend deployment"
+                                
+                                # Annotate frontend deployment
+                                kubectl annotate deployment frontend-deployment \
+                                    -n \${K8S_NAMESPACE} \
+                                    kubernetes.io/change-cause="\${CHANGE_CAUSE}" \
+                                    --overwrite || echo "⚠️ Failed to annotate frontend deployment"
+                                
+                                echo "✅ CHANGE-CAUSE annotations added"
+                            """
+                            
                             // Wait for deployments to be ready (optimized with shorter timeout and better feedback)
                             sh '''
                                 echo "⏳ Waiting for deployments to be ready..."
